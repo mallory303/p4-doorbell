@@ -5,6 +5,10 @@ Custom integration for the ESP32-P4 H.264 doorbell
 
 ## What it does
 
+- **Live camera entity** (`camera.p4_doorbell_camera`): the P4 serves RTSP
+  (`rtsp://<doorbell>:554/live`, H.264 passthrough, zero transcode); HA routes
+  it through go2rtc → **WebRTC — works remotely via Nabu Casa**. The popup card
+  uses this automatically (iframe fallback on LAN).
 - Receives **ring** (button) and **presence** (mmWave radar) events from the
   doorbell via an auto-registered HTTP webhook
 - **Modular responder pipeline** — modules decide what happens on a ring, in

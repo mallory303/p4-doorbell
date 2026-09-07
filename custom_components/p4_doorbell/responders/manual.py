@@ -21,22 +21,31 @@ from homeassistant.components.persistent_notification import (
 )
 from homeassistant.helpers.network import get_url
 
+from homeassistant.helpers import entity_registry as er
+
 from ..const import (
     CHIME_URL_PATH,
     CONF_CHIME_PLAYERS,
     CONF_P4_HOST,
     CONF_POPUP_BROWSER,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _popup_card(host: str) -> dict:
-    return {
+def _popup_card(hass, entry_data: dict) -> dict:
+    card = {
         "type": "custom:p4-doorbell-card",
-        "p4_host": host,
         "fullscreen": True,
+        "p4_host": entry_data.get(CONF_P4_HOST),
     }
+    cam_id = er.async_get(hass).async_get_entity_id(
+        "camera", DOMAIN, f"{entry_data.get('_entry_id')}_camera"
+    )
+    if cam_id:
+        card["camera_entity"] = cam_id   # WebRTC via go2rtc: works over Nabu Casa
+    return card
 
 
 class ManualResponder:
@@ -74,7 +83,7 @@ class ManualResponder:
                     {
                         "browser_id": browser_id,
                         "title": "Doorbell",
-                        "content": _popup_card(self.entry_data.get(CONF_P4_HOST, "")),
+                        "content": _popup_card(self.hass, self.entry_data),
                         "size": "fullscreen",
                         "dismissable": True,
                     },

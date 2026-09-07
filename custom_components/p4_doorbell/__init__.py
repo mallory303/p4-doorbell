@@ -34,7 +34,7 @@ from .responders.manual import ManualResponder
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["event", "binary_sensor", "button", "number"]
+PLATFORMS = ["event", "binary_sensor", "button", "number", "camera"]
 
 RESPONDER_CLASSES = {
     "manual": ManualResponder,
@@ -94,10 +94,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     api = P4Api(async_get_clientsession(hass), entry.data[CONF_P4_HOST])
     manager = CallManager(hass, entry.data)
 
+    responder_data = dict(entry.data)
+    responder_data["_entry_id"] = entry.entry_id
     for name in entry.data.get(CONF_RESPONDERS, ["manual"]):
         cls = RESPONDER_CLASSES.get(name)
         if cls:
-            manager.register_responder(cls(hass, entry.data))
+            manager.register_responder(cls(hass, responder_data))
         else:
             _LOGGER.warning("unknown responder module: %s", name)
 
