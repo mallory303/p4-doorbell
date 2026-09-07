@@ -1,0 +1,106 @@
+"""Manual responder: chime the house, pop the doorbell UI up on the tablet.
+
+On ring:
+  1. play the bundled chime on every configured media_player
+  2. open the fullscreen doorbell popup on the wall tablet via browser_mod
+     (gracefully skipped when browser_mod or a browser id is absent)
+  3. always fire a persistent notification as a last-resort path
+"""
+from __future__ import annotations
+
+import logging
+
+from homeassistant.components.media_player import (
+    ATTR_MEDIA_CONTENT_ID,
+    ATTR_MEDIA_CONTENT_TYPE,
+    DOMAIN as MP_DOMAIN,
+    SERVICE_PLAY_MEDIA,
+)
+from homeassistant.components.persistent_notification import (
+    DOMAIN as PN_DOMAIN,
+)
+from homeassistant.helpers.network import get_url
+
+from ..const import (
+    CHIME_URL_PATH,
+    CONF_CHIME_PLAYERS,
+    CONF_P4_HOST,
+    CONF_POPUP_BROWSER,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def _popup_card(host: str) -> dict:
+    return {
+        "type": "custom:p4-doorbell-card",
+        "p4_host": host,
+        "fullscreen": True,
+    }
+
+
+class ManualResponder:
+    name = "manual"
+
+    def __init__(self, hass, entry_data) -> None:
+        self.hass = hass
+        self.entry_data = entry_data
+
+    async def on_ring(self, call) -> None:
+        players = self.entry_data.get(CONF_CHIME_PLAYERS) or []
+        if players:
+            chime_url = get_url(self.hass) + CHIME_URL_PATH
+            for player in players:
+                try:
+                    await self.hass.services.async_call(
+                        MP_DOMAIN,
+                        SERVICE_PLAY_MEDIA,
+                        {
+                            "entity_id": player,
+                            ATTR_MEDIA_CONTENT_TYPE: "music",
+                            ATTR_MEDIA_CONTENT_ID: chime_url,
+                        },
+                        blocking=False,
+                    )
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("chime failed on %s", player)
+
+        browser_id = (self.entry_data.get(CONF_POPUP_BROWSER) or "").strip()
+        if browser_id and self.hass.services.has_service("browser_mod", "popup"):
+            try:
+                await self.hass.services.async_call(
+                    "browser_mod",
+                    "popup",
+                    {
+                        "browser_id": browser_id,
+                        "title": "Doorbell",
+                        "content": _popup_card(self.entry_data.get(CONF_P4_HOST, "")),
+                        "size": "fullscreen",
+                        "dismissable": True,
+                    },
+                    blocking=False,
+                )
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("browser_mod popup failed")
+        elif browser_id:
+            _LOGGER.warning("browser_mod not installed - popup skipped")
+
+        # last-resort visibility path, always on
+        await self.hass.services.async_call(
+            PN_DOMAIN,
+            "create",
+            {
+                "title": "Doorbell",
+                "message": "Someone is at the door.",
+                "notification_id": "p4_doorbell_ring",
+            },
+            blocking=False,
+        )
+
+    async def on_ended(self, call) -> None:
+        await self.hass.services.async_call(
+            PN_DOMAIN,
+            "dismiss",
+            {"notification_id": "p4_doorbell_ring"},
+            blocking=False,
+        )

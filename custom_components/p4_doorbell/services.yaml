@@ -1,0 +1,11 @@
+answer:
+  name: Answer
+  description: Answer the doorbell call (from the popup or an automation).
+
+end_call:
+  name: End call
+  description: End the current doorbell call and return to idle.
+
+simulate_ring:
+  name: Simulate ring
+  description: Fire a doorbell ring event without the physical button (testing).

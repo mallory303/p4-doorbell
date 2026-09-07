@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "P4 Doorbell",
+        "description": "Connect to the ESP32-P4 doorbell on your LAN.",
+        "data": {
+          "p4_host": "Doorbell base URL",
+          "chime_players": "Chime media players",
+          "popup_browser_id": "Popup browser_id (browser_mod, optional)",
+          "tts_entity": "TTS entity (for automated responders)",
+          "responders": "Responder modules (in priority order)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach the doorbell - check the URL"
+    }
+  }
+}
