@@ -6,6 +6,7 @@ modular responders, and exposes entities + services + a Lovelace card.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 
@@ -72,7 +73,22 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     await hass.http.async_register_static_paths(
         [StaticPathConfig("/p4_doorbell_static", str(www), cache_headers=False)]
     )
-    add_extra_js_url(hass, CARD_URL_PATH)
+    # Serve the card from /local (= /config/www): core-served from the very
+    # first HTTP request, so a tablet reloading mid-startup can't 404 it
+    # (custom static paths register later -> "Configuration error" popups).
+    # Content-hash cache-buster so card updates bust WebView caches.
+    def _copy_card() -> str:
+        src = www / "p4-doorbell-card.js"
+        target = Path(hass.config.path("www")) / "p4-doorbell-card.js"
+        data = src.read_bytes()
+        if not target.exists() or target.read_bytes() != data:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        return hashlib.md5(data).hexdigest()[:8]
+
+    card_hash = await hass.async_add_executor_job(_copy_card)
+    card_url = f"/local/p4-doorbell-card.js?v={card_hash}"
+    add_extra_js_url(hass, card_url)
 
     async def _register_resource() -> None:
         """Add the card as a Lovelace resource (storage-mode dashboards)."""
@@ -83,17 +99,23 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
         try:
             resources = lovelace.resources
             await resources.async_load()
+            for r in list(resources.async_items()):
+                url = r.get("url", "")
+                if "p4-doorbell-card.js" in url and not url.startswith(card_url):
+                    try:
+                        await resources.async_delete_item(r["id"])
+                        _LOGGER.info("removed stale Lovelace resource %s", url)
+                    except Exception:
+                        _LOGGER.exception("could not remove stale resource %s", url)
             if not any(
-                CARD_URL_PATH in r.get("url", "") for r in resources.async_items()
+                r.get("url", "").startswith(card_url) for r in resources.async_items()
             ):
-                await resources.async_create(
-                    {"res_type": "module", "url": CARD_URL_PATH}
-                )
-                _LOGGER.info("registered Lovelace resource %s", CARD_URL_PATH)
+                await resources.async_create({"res_type": "module", "url": card_url})
+                _LOGGER.info("registered Lovelace resource %s", card_url)
         except Exception:
             _LOGGER.exception(
                 "could not auto-register Lovelace resource; add %s manually (module)",
-                CARD_URL_PATH,
+                card_url,
             )
 
     if hass.data.get("lovelace") is not None:
