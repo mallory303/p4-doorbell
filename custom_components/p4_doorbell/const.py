@@ -20,6 +20,13 @@ STATE_MODULE = "module_active"  # an automated responder has the call
 # HA bus events (for user automations)
 EVENT_RING = f"{DOMAIN}_ring"
 EVENT_PRESENCE = f"{DOMAIN}_presence"
+
+# chime library (under /config/www -> /local/)
+CHIMES_SUBDIR = "p4_doorbell/chimes"
+BUNDLED_CHIME_LABEL = "ding-dong (bundled)"
+SIGNAL_CHIMES_UPDATED = f"{DOMAIN}_chimes_updated"
+
+DEFAULT_ANNOUNCE_MESSAGE = "Hello! Someone will be with you shortly."
 EVENT_ANSWERED = f"{DOMAIN}_answered"
 EVENT_ENDED = f"{DOMAIN}_ended"
 

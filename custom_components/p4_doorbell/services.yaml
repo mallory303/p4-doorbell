@@ -9,3 +9,16 @@ end_call:
 simulate_ring:
   name: Simulate ring
   description: Fire a doorbell ring event without the physical button (testing).
+
+announce:
+  name: Announce
+  description: >-
+    Speak the announce message (ElevenLabs) in the house on the chime
+    players and on the doorbell speaker for the visitor. Defaults to the
+    configured announce message text.
+  fields:
+    message:
+      name: Message
+      description: Optional override text; empty = the configured announce message.
+      selector:
+        text:

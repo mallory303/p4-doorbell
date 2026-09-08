@@ -24,6 +24,16 @@ class P4Api:
         ) as resp:
             resp.raise_for_status()
 
+    async def async_play_pcm(self, pcm: bytes) -> None:
+        """POST raw PCM16@16kHz mono to /api/play (doorbell speaker)."""
+        async with self._session.post(
+            f"{self._host}/api/play",
+            data=pcm,
+            headers={"Content-Type": "application/octet-stream"},
+            timeout=aiohttp.ClientTimeout(total=60),
+        ) as resp:
+            resp.raise_for_status()
+
     async def async_get_volume(self) -> int:
         async with self._session.get(
             f"{self._host}/api/volume", timeout=aiohttp.ClientTimeout(total=5)

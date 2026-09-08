@@ -93,10 +93,20 @@ class ManualResponder:
         self.hass = hass
         self.entry_data = entry_data
 
+    def _chime_url(self) -> str:
+        """Selected chime from the library, else the bundled ding-dong."""
+        entry_id = self.entry_data.get("_entry_id", "")
+        data = self.hass.data.get(DOMAIN, {}).get(entry_id) or {}
+        if chime := data.get("chime"):
+            from urllib.parse import quote
+
+            return "/local/p4_doorbell/chimes/" + quote(chime)
+        return CHIME_URL_PATH
+
     async def on_ring(self, call) -> None:
         players = self.entry_data.get(CONF_CHIME_PLAYERS) or []
         if players:
-            chime_url = get_url(self.hass) + CHIME_URL_PATH
+            chime_url = get_url(self.hass) + self._chime_url()
             for player in players:
                 try:
                     await self.hass.services.async_call(

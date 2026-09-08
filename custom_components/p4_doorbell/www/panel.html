@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P4 Doorbell</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: Roboto, sans-serif; background: #111; color: #e1e1e1;
+         margin: 0; padding: 24px; max-width: 720px; }
+  h1 { font-size: 22px; font-weight: 500; }
+  h2 { font-size: 16px; font-weight: 500; color: #9ab; margin: 28px 0 10px;
+       text-transform: uppercase; letter-spacing: .08em; }
+  .card { background: #1c1c1e; border-radius: 12px; padding: 16px; margin-bottom: 8px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 8px 0;
+         border-bottom: 1px solid #2a2a2e; }
+  .row:last-child { border-bottom: none; }
+  .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .active-badge { color: #7ee787; font-size: 12px; }
+  button { background: #0a84ff; color: #fff; border: none; border-radius: 8px;
+           padding: 8px 14px; font-size: 14px; cursor: pointer; }
+  button.ghost { background: #2c2c2e; }
+  button:active { opacity: .7; }
+  textarea { width: 100%; min-height: 70px; background: #2c2c2e; color: #e1e1e1;
+             border: 1px solid #3a3a3e; border-radius: 8px; padding: 10px;
+             font-size: 15px; box-sizing: border-box; }
+  .hint { color: #889; font-size: 13px; margin-top: 6px; }
+  audio { display: none; }
+  .status { min-height: 18px; color: #7ee787; font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>P4 Doorbell</h1>
+
+<h2>Chime sounds</h2>
+<div class="card" id="chimeCard">
+  <div id="chimeList"><span class="hint">loading…</span></div>
+  <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
+    <input type="file" id="fileInput" accept=".mp3,.wav,.ogg,.m4a">
+    <button id="uploadBtn">Upload</button>
+  </div>
+  <div class="hint">mp3/wav/ogg/m4a, max 8 MB. Files land in
+    /config/www/p4_doorbell/chimes — playable by every media_player.</div>
+  <div class="status" id="chimeStatus"></div>
+</div>
+
+<h2>Announce message</h2>
+<div class="card">
+  <textarea id="announceText" placeholder="Hello! Someone will be with you shortly."></textarea>
+  <div class="hint">Synthesized with your TTS engine (<span id="ttsName">…</span>).</div>
+  <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+    <button id="saveAnnounce">Save</button>
+    <button class="ghost" id="previewTts">Preview in browser</button>
+    <button class="ghost" id="announceNow">Announce now</button>
+  </div>
+  <div class="hint">“Announce now” speaks in the house (chime players) and on
+    the doorbell speaker for the visitor.</div>
+  <div class="status" id="announceStatus"></div>
+</div>
+
+<audio id="player"></audio>
+
+<script>
+(function () {
+  "use strict";
+
+  var token = null;
+  try {
+    token = JSON.parse(localStorage.getItem("hassTokens")).access_token;
+  } catch (e) {}
+
+  function api(method, path, body) {
+    return fetch(path, {
+      method: method,
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }).then(function (r) {
+      if (!r.ok) throw new Error(method + " " + path + " -> " + r.status);
+      return r.json().catch(function () { return {}; });
+    });
+  }
+
+  var player = document.getElementById("player");
+  var selectEntity = null;   // select.p4_doorbell_chime_sound
+  var textEntity = null;     // text.p4_doorbell_announce_message
+
+  function setStatus(id, msg, isErr) {
+    var el = document.getElementById(id);
+    el.textContent = msg;
+    el.style.color = isErr ? "#ff7b72" : "#7ee787";
+    if (msg) setTimeout(function () { el.textContent = ""; }, 5000);
+  }
+
+  function loadChimes() {
+    api("GET", "/api/p4_doorbell/chimes").then(function (d) {
+      var list = document.getElementById("chimeList");
+      var files = d.chimes || [];
+      if (!files.length) {
+        list.innerHTML = '<span class="hint">No custom chimes yet — using the bundled ding-dong.</span>';
+        return;
+      }
+      list.innerHTML = "";
+      files.forEach(function (f) {
+        var row = document.createElement("div");
+        row.className = "row";
+        var badge = (selectEntity && selectEntity.state === f)
+          ? ' <span class="active-badge">● active</span>' : "";
+        row.innerHTML = '<span class="name">' + f + badge + "</span>";
+        var play = document.createElement("button");
+        play.className = "ghost"; play.textContent = "▶";
+        play.onclick = function () {
+          player.src = "/local/p4_doorbell/chimes/" + encodeURIComponent(f);
+          player.play();
+        };
+        var use = document.createElement("button");
+        use.textContent = "Use";
+        use.onclick = function () {
+          if (!selectEntity) return;
+          api("POST", "/api/services/select/select_option", {
+            entity_id: selectEntity.entity_id, option: f
+          }).then(function () {
+            selectEntity.state = f;
+            setStatus("chimeStatus", "Active chime: " + f);
+            loadChimes();
+          }).catch(function (e) { setStatus("chimeStatus", String(e), true); });
+        };
+        row.appendChild(play);
+        row.appendChild(use);
+        list.appendChild(row);
+      });
+    }).catch(function (e) {
+      document.getElementById("chimeList").innerHTML =
+        '<span class="hint">' + e + "</span>";
+    });
+  }
+
+  document.getElementById("uploadBtn").onclick = function () {
+    var input = document.getElementById("fileInput");
+    if (!input.files.length) return;
+    var fd = new FormData();
+    fd.append("file", input.files[0]);
+    fetch("/api/p4_doorbell/upload_chime", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + token },
+      body: fd
+    }).then(function (r) {
+      if (!r.ok) throw new Error("upload -> " + r.status);
+      setStatus("chimeStatus", "Uploaded " + input.files[0].name);
+      input.value = "";
+      loadChimes();
+    }).catch(function (e) { setStatus("chimeStatus", String(e), true); });
+  };
+
+  function loadAnnounce() {
+    api("GET", "/api/states/" + textEntity.entity_id).then(function (st) {
+      document.getElementById("announceText").value = st.state || "";
+    });
+  }
+
+  document.getElementById("saveAnnounce").onclick = function () {
+    api("POST", "/api/services/text/set_value", {
+      entity_id: textEntity.entity_id,
+      value: document.getElementById("announceText").value
+    }).then(function () {
+      setStatus("announceStatus", "Saved.");
+    }).catch(function (e) { setStatus("announceStatus", String(e), true); });
+  };
+
+  document.getElementById("previewTts").onclick = function () {
+    var msg = document.getElementById("announceText").value;
+    api("GET", "/api/p4_doorbell/config").then(function (cfg) {
+      return api("POST", "/api/tts_get_url", {
+        platform: cfg.tts_entity, message: msg
+      });
+    }).then(function (d) {
+      player.src = d.url || d.path;
+      player.play();
+    }).catch(function (e) { setStatus("announceStatus", String(e), true); });
+  };
+
+  document.getElementById("announceNow").onclick = function () {
+    api("POST", "/api/services/p4_doorbell/announce", {})
+      .then(function () { setStatus("announceStatus", "Announced."); })
+      .catch(function (e) { setStatus("announceStatus", String(e), true); });
+  };
+
+  document.getElementById("announceText").addEventListener("input", function () {
+    document.getElementById("saveAnnounce").textContent = "Save *";
+  });
+
+  // discover entity ids + tts name
+  api("GET", "/api/states").then(function (states) {
+    states.forEach(function (st) {
+      if (st.entity_id.indexOf("p4_doorbell") !== -1) {
+        if (st.entity_id.indexOf("select.") === 0 && st.entity_id.indexOf("chime") !== -1)
+          selectEntity = st;
+        if (st.entity_id.indexOf("text.") === 0 && st.entity_id.indexOf("announce") !== -1)
+          textEntity = st;
+      }
+    });
+    loadChimes();
+    if (textEntity) loadAnnounce();
+  });
+
+  api("GET", "/api/p4_doorbell/config").then(function (cfg) {
+    document.getElementById("ttsName").textContent = cfg.tts_entity;
+  });
+})();
+</script>
+</body>
+</html>

@@ -19,12 +19,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import P4Api
+from .announce import async_announce as _async_announce
 from .call_manager import CallManager
 from .const import (
     AVAILABLE_RESPONDERS,
     CARD_URL_PATH,
+    CONF_CHIME_PLAYERS,
     CONF_P4_HOST,
     CONF_RESPONDERS,
+    CONF_TTS_ENTITY,
+    DEFAULT_TTS_ENTITY,
     DOMAIN,
     SERVICE_ANSWER,
     SERVICE_END_CALL,
@@ -36,7 +40,7 @@ from .responders.manual import ManualResponder
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["event", "binary_sensor", "button", "number", "camera"]
+PLATFORMS = ["event", "binary_sensor", "button", "number", "camera", "select", "text"]
 
 RESPONDER_CLASSES = {
     "manual": ManualResponder,
@@ -66,6 +70,29 @@ async def _handle_webhook(hass: HomeAssistant, webhook_id: str, request) -> None
         await manager.async_presence(kind == "presence")
     else:
         _LOGGER.warning("unknown doorbell event: %s", kind)
+
+
+async def _async_register_panel(hass: HomeAssistant) -> None:
+    """Sidebar admin panel (chime library, announce) + API views."""
+    from homeassistant.components.frontend import async_register_built_in_panel
+
+    from .views import (
+        P4DoorbellChimesView,
+        P4DoorbellConfigView,
+        P4DoorbellUploadView,
+    )
+
+    hass.http.register_view(P4DoorbellChimesView())
+    hass.http.register_view(P4DoorbellUploadView())
+    hass.http.register_view(P4DoorbellConfigView())
+    async_register_built_in_panel(
+        hass,
+        "iframe",
+        sidebar_title="P4 Doorbell",
+        sidebar_icon="mdi:doorbell-video",
+        frontend_url_path="p4_doorbell",
+        config={"url": "/p4_doorbell_static/panel.html"},
+    )
 
 
 async def _async_register_frontend(hass: HomeAssistant) -> None:
@@ -156,6 +183,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     await _async_register_frontend(hass)
+    await _async_register_panel(hass)
 
     if not hass.services.has_service(DOMAIN, SERVICE_ANSWER):
         async def _answer(call):
@@ -170,9 +198,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             for data in hass.data[DOMAIN].values():
                 await data["manager"].async_ring(source="simulate")
 
+        async def _announce(call):
+            for data in hass.data[DOMAIN].values():
+                await _async_announce(hass, entry, data, call)
+
         hass.services.async_register(DOMAIN, SERVICE_ANSWER, _answer)
         hass.services.async_register(DOMAIN, SERVICE_END_CALL, _end)
         hass.services.async_register(DOMAIN, SERVICE_SIMULATE_RING, _simulate)
+        hass.services.async_register(DOMAIN, "announce", _announce)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _LOGGER.info(
