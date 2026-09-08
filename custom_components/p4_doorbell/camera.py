@@ -6,7 +6,11 @@ transcoding on the Pi.
 """
 from __future__ import annotations
 
-from homeassistant.components.camera import Camera, StreamType
+from homeassistant.components.camera import (
+    Camera,
+    CameraEntityFeature,
+    StreamType,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -30,6 +34,7 @@ class P4DoorbellCamera(Camera):
     _attr_name = "Camera"
     # declares "this camera streams": the dialog shows live view (WebRTC via
     # go2rtc, HLS fallback) instead of just a still preview
+    _attr_supported_features = CameraEntityFeature.STREAM
     _attr_frontend_stream_type = StreamType.HLS
 
     def __init__(self, entry: ConfigEntry) -> None:
