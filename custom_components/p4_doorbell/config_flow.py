@@ -13,6 +13,7 @@ from .api import P4Api
 from .const import (
     AVAILABLE_RESPONDERS,
     CONF_CHIME_PLAYERS,
+    CONF_NOTIFY_TARGETS,
     CONF_P4_HOST,
     CONF_POPUP_BROWSER,
     CONF_RESPONDERS,
@@ -56,6 +57,11 @@ class P4DoorbellConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 ),
                 vol.Optional(CONF_POPUP_BROWSER, default=""): str,
+                vol.Optional(CONF_NOTIFY_TARGETS, default=[]): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="notify", multiple=True
+                    )
+                ),
                 vol.Optional(
                     CONF_TTS_ENTITY, default=DEFAULT_TTS_ENTITY
                 ): selector.EntitySelector(

@@ -26,6 +26,7 @@ from homeassistant.helpers import entity_registry as er
 from ..const import (
     CHIME_URL_PATH,
     CONF_CHIME_PLAYERS,
+    CONF_NOTIFY_TARGETS,
     CONF_P4_HOST,
     CONF_POPUP_BROWSER,
     DOMAIN,
@@ -93,6 +94,22 @@ class ManualResponder:
                 _LOGGER.exception("browser_mod popup failed")
         elif browser_id:
             _LOGGER.warning("browser_mod not installed - popup skipped")
+
+        # mobile push (companion app on phone/tablet; mirrors to the watch)
+        for target in self.entry_data.get(CONF_NOTIFY_TARGETS) or []:
+            try:
+                await self.hass.services.async_call(
+                    "notify",
+                    "send_message",
+                    {
+                        "entity_id": target,
+                        "title": "🚪 Doorbell",
+                        "message": "Someone is at the door.",
+                    },
+                    blocking=False,
+                )
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("push notification failed on %s", target)
 
         # last-resort visibility path, always on
         await self.hass.services.async_call(

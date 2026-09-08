@@ -8,6 +8,7 @@
           "p4_host": "Doorbell base URL",
           "chime_players": "Chime media players",
           "popup_browser_id": "Popup browser_id (browser_mod, optional)",
+          "notify_targets": "Push notification targets (phone, tablet, watch)",
           "tts_entity": "TTS entity (for automated responders)",
           "responders": "Responder modules (in priority order)"
         }

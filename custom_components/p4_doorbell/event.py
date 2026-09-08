@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from homeassistant.components.event import EventDeviceClass, EventEntity
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.core import callback
 
 from .const import DOMAIN, EVENT_PRESENCE, EVENT_RING
 
@@ -35,10 +36,12 @@ class P4RingEventEntity(EventEntity):
             self.hass.bus.async_listen(EVENT_PRESENCE, self._on_presence)
         )
 
+    @callback
     def _on_ring(self, event) -> None:
         self._trigger_event("ring", dict(event.data))
         self.async_write_ha_state()
 
+    @callback
     def _on_presence(self, event) -> None:
         self._trigger_event("presence", dict(event.data))
         self.async_write_ha_state()

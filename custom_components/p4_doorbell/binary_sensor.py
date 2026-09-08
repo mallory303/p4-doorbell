@@ -6,6 +6,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.core import callback
 
 from .const import DOMAIN, EVENT_PRESENCE
 
@@ -29,6 +30,7 @@ class P4PresenceSensor(BinarySensorEntity):
             self.hass.bus.async_listen(EVENT_PRESENCE, self._on_presence)
         )
 
+    @callback
     def _on_presence(self, event) -> None:
         self._attr_is_on = bool(event.data.get("present"))
         self.async_write_ha_state()

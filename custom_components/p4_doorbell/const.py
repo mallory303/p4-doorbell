@@ -5,6 +5,7 @@ DOMAIN = "p4_doorbell"
 CONF_P4_HOST = "p4_host"
 CONF_CHIME_PLAYERS = "chime_players"
 CONF_POPUP_BROWSER = "popup_browser_id"
+CONF_NOTIFY_TARGETS = "notify_targets"
 CONF_TTS_ENTITY = "tts_entity"
 CONF_RESPONDERS = "responders"
 
