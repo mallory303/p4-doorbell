@@ -130,3 +130,15 @@ class ManualResponder:
             {"notification_id": "p4_doorbell_ring"},
             blocking=False,
         )
+        # close the tablet popup too, otherwise it lingers and blocks re-popup
+        browser_id = (self.entry_data.get(CONF_POPUP_BROWSER) or "").strip()
+        if browser_id and self.hass.services.has_service("browser_mod", "close_popup"):
+            try:
+                await self.hass.services.async_call(
+                    "browser_mod",
+                    "close_popup",
+                    {"browser_id": browser_id},
+                    blocking=False,
+                )
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("browser_mod close_popup failed")

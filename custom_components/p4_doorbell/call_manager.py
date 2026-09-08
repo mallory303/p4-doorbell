@@ -69,7 +69,8 @@ class CallManager:
         _LOGGER.info("doorbell ring (%s)", source)
         self.hass.bus.async_fire(EVENT_RING, {"source": source})
         if self.state != STATE_IDLE:
-            return  # already ringing/in a call - modules see the event anyway
+            if source == "radar":
+                return  # presence flapping must not tea...[truncated]
         self._set_state(STATE_RINGING)
         self._ring_timeout_cancel = async_call_later(
             self.hass, RING_TIMEOUT_S, self._async_ring_timeout
