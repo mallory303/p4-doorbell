@@ -36,17 +36,54 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _popup_card(hass, entry_data: dict) -> dict:
-    card = {
-        "type": "custom:p4-doorbell-card",
-        "fullscreen": True,
-        "p4_host": entry_data.get(CONF_P4_HOST),
-    }
+    """Popup content built from CORE Lovelace cards only.
+
+    The wall tablet (ThinkSmart) runs an old WebView where custom card
+    elements are fragile (startup races, cache, parse issues) - a popup
+    built from built-in cards always renders.
+    """
+    cards = []
     cam_id = er.async_get(hass).async_get_entity_id(
         "camera", DOMAIN, f"{entry_data.get('_entry_id')}_camera"
     )
     if cam_id:
-        card["camera_entity"] = cam_id   # WebRTC via go2rtc: works over Nabu Casa
-    return card
+        cards.append(
+            {
+                "type": "picture-entity",
+                "entity": cam_id,
+                "camera_view": "live",  # WebRTC via go2rtc: works over Nabu Casa
+                "show_name": False,
+                "show_state": False,
+            }
+        )
+    cards.append(
+        {
+            "type": "grid",
+            "columns": 2,
+            "square": False,
+            "cards": [
+                {
+                    "type": "button",
+                    "name": "Answer",
+                    "icon": "mdi:phone",
+                    "tap_action": {
+                        "action": "call-service",
+                        "service": "p4_doorbell.answer",
+                    },
+                },
+                {
+                    "type": "button",
+                    "name": "End call",
+                    "icon": "mdi:phone-hangup",
+                    "tap_action": {
+                        "action": "call-service",
+                        "service": "p4_doorbell.end_call",
+                    },
+                },
+            ],
+        }
+    )
+    return {"type": "vertical-stack", "cards": cards}
 
 
 class ManualResponder:

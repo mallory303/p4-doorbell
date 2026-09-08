@@ -120,12 +120,13 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
 
     if hass.data.get("lovelace") is not None:
         await _register_resource()
-    else:
-        # integrations can set up before lovelace: defer to post-start
-        hass.bus.async_listen_once(
-            EVENT_HOMEASSISTANT_STARTED,
-            lambda _: hass.async_create_task(_register_resource()),
-        )
+    # Always also retry post-start: if lovelace was ready but its resource
+    # collection wasn't, the first attempt may fail - the guard inside
+    # _register_resource makes the retry a no-op when it succeeded.
+    hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STARTED,
+        lambda _: hass.async_create_task(_register_resource()),
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
