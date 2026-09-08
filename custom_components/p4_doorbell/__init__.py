@@ -13,6 +13,7 @@ from homeassistant.components import webhook
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -72,21 +73,37 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
         [StaticPathConfig("/p4_doorbell_static", str(www), cache_headers=False)]
     )
     add_extra_js_url(hass, CARD_URL_PATH)
-    # add as a Lovelace resource too (storage-mode dashboards)
-    lovelace = hass.data.get("lovelace")
-    if lovelace is not None and getattr(lovelace, "mode", None) == "storage":
+
+    async def _register_resource() -> None:
+        """Add the card as a Lovelace resource (storage-mode dashboards)."""
+        lovelace = hass.data.get("lovelace")
+        if lovelace is None:
+            _LOGGER.warning("lovelace not ready; card resource not registered")
+            return
         try:
             resources = lovelace.resources
             await resources.async_load()
-            if not any(CARD_URL_PATH in r.get("url", "") for r in resources.async_items()):
+            if not any(
+                CARD_URL_PATH in r.get("url", "") for r in resources.async_items()
+            ):
                 await resources.async_create(
                     {"res_type": "module", "url": CARD_URL_PATH}
                 )
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning(
+                _LOGGER.info("registered Lovelace resource %s", CARD_URL_PATH)
+        except Exception:
+            _LOGGER.exception(
                 "could not auto-register Lovelace resource; add %s manually (module)",
                 CARD_URL_PATH,
             )
+
+    if hass.data.get("lovelace") is not None:
+        await _register_resource()
+    else:
+        # integrations can set up before lovelace: defer to post-start
+        hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED,
+            lambda _: hass.async_create_task(_register_resource()),
+        )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
