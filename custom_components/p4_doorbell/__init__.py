@@ -17,6 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.network import get_url
 
 from .api import P4Api
 from .announce import async_announce as _async_announce
@@ -177,6 +178,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass, DOMAIN, "P4 Doorbell", webhook_id, _handle_webhook,
         allowed_methods=("POST",),
     )
+
+    # Tell the P4 where to send ring/presence events. Needs firmware with
+    # /api/ha (ha_notify); older builds 404 here - events then stay local.
+    try:
+        webhook_url = f"{get_url(hass)}/api/webhook/{webhook_id}"
+        await api.async_set_ha_webhook(webhook_url)
+        _LOGGER.info("pushed webhook URL to doorbell: %s", webhook_url)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning(
+            "could not push webhook URL to the doorbell (%s) - update its "
+            "firmware, or physical-press events won't reach HA",
+            err,
+        )
 
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,

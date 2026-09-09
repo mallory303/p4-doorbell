@@ -49,6 +49,15 @@ class P4Api:
         ) as resp:
             resp.raise_for_status()
 
+    async def async_set_ha_webhook(self, url: str) -> None:
+        """Push the HA webhook URL to the P4 (it POSTs ring events back)."""
+        async with self._session.post(
+            f"{self._host}/api/ha",
+            json={"url": url},
+            timeout=aiohttp.ClientTimeout(total=5),
+        ) as resp:
+            resp.raise_for_status()
+
     @property
     def ui_url(self) -> str:
         """The P4's own web UI (live H.264 player + mic meter + controls)."""
