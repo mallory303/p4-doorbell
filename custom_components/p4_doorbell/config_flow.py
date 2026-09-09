@@ -12,6 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import P4Api
 from .const import (
     AVAILABLE_RESPONDERS,
+    CONF_CHIME_NOTIFY,
     CONF_CHIME_PLAYERS,
     CONF_NOTIFY_TARGETS,
     CONF_P4_HOST,
@@ -43,6 +44,11 @@ def _schema(defaults: dict) -> vol.Schema:
             ): str,
             vol.Optional(
                 CONF_NOTIFY_TARGETS, default=defaults.get(CONF_NOTIFY_TARGETS, [])
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="notify", multiple=True)
+            ),
+            vol.Optional(
+                CONF_CHIME_NOTIFY, default=defaults.get(CONF_CHIME_NOTIFY, [])
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="notify", multiple=True)
             ),

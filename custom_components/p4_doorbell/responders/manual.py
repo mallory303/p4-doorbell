@@ -25,6 +25,7 @@ from homeassistant.helpers import entity_registry as er
 
 from ..const import (
     CHIME_URL_PATH,
+    CONF_CHIME_NOTIFY,
     CONF_CHIME_PLAYERS,
     CONF_NOTIFY_TARGETS,
     CONF_P4_HOST,
@@ -105,7 +106,8 @@ class ManualResponder:
 
     async def on_ring(self, call) -> None:
         players = self.entry_data.get(CONF_CHIME_PLAYERS) or []
-        if players:
+        notify_chime = self.entry_data.get(CONF_CHIME_NOTIFY) or []
+        if players or notify_chime:
             chime_url = get_url(self.hass) + self._chime_url()
             for player in players:
                 try:
@@ -137,6 +139,36 @@ class ManualResponder:
                         },
                         blocking=False,
                     )
+
+        # chime via companion-app media command: plays through the device
+        # speaker even with the screen off (the Lenovo hub's own media player
+        # can't receive play_media - this is its audio path)
+        for target in notify_chime:
+            slug = target.split(".", 1)[-1]  # notify.lenovo_x -> lenovo_x
+            service = f"mobile_app_{slug}"
+            if not self.hass.services.has_service("notify", service):
+                _LOGGER.warning(
+                    "chime: no legacy notify service notify.%s for %s - skipped",
+                    service,
+                    target,
+                )
+                continue
+            try:
+                await self.hass.services.async_call(
+                    "notify",
+                    service,
+                    {
+                        "message": "command_media",
+                        "title": "P4 Doorbell",
+                        "data": {
+                            "media_url": chime_url,
+                            "media_stream": "alarm_stream",
+                        },
+                    },
+                    blocking=False,
+                )
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("chime command_media failed on %s", target)
 
         browser_id = (self.entry_data.get(CONF_POPUP_BROWSER) or "").strip()
         if browser_id and self.hass.services.has_service("browser_mod", "popup"):
