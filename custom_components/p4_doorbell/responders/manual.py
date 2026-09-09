@@ -154,15 +154,16 @@ class ManualResponder:
                 )
                 continue
             try:
-                # companion devices often sit with the alarm/media channel
-                # muted: raise it first or the chime plays into silence
+                # proven combo on the ThinkSmart: raise the MUSIC stream
+                # (the companion app's default playback channel), then play.
+                # alarm_stream was tried first and stayed silent there.
                 await self.hass.services.async_call(
                     "notify",
                     service,
                     {
                         "message": "command_volume_level",
                         "title": "P4 Doorbell",
-                        "data": {"media_stream": "alarm_stream", "volume_level": 15},
+                        "data": {"media_stream": "music", "volume_level": 15},
                     },
                     blocking=False,
                 )
@@ -172,10 +173,7 @@ class ManualResponder:
                     {
                         "message": "command_media",
                         "title": "P4 Doorbell",
-                        "data": {
-                            "media_url": chime_url,
-                            "media_stream": "alarm_stream",
-                        },
+                        "data": {"media_url": chime_url},
                     },
                     blocking=False,
                 )
