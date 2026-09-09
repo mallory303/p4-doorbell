@@ -1,4 +1,4 @@
-"""Test-chime button."""
+"""Test-ring button: simulates a physical doorbell button press."""
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
@@ -8,13 +8,13 @@ from .const import DOMAIN
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    async_add_entities([P4ChimeButton(hass, entry)])
+    async_add_entities([P4TestRingButton(hass, entry)])
 
 
-class P4ChimeButton(ButtonEntity):
+class P4TestRingButton(ButtonEntity):
     _attr_has_entity_name = True
-    _attr_name = "Test chime"
-    _attr_icon = "mdi:bell-ring"
+    _attr_name = "Test ring"
+    _attr_icon = "mdi:doorbell"
 
     def __init__(self, hass, entry) -> None:
         self._hass = hass
@@ -23,5 +23,7 @@ class P4ChimeButton(ButtonEntity):
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
 
     async def async_press(self) -> None:
-        api = self._hass.data[DOMAIN][self._entry.entry_id]["api"]
-        await api.async_chime()
+        """Full ring pipeline: popup + chime + notifications, exactly like the
+        physical button (but without driving the doorbell's own speaker)."""
+        manager = self._hass.data[DOMAIN][self._entry.entry_id]["manager"]
+        await manager.async_ring(source="simulate")
