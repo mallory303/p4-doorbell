@@ -81,6 +81,25 @@ class P4DoorbellUploadView(HomeAssistantView):
         return self.json({"ok": True, "file": filename})
 
 
+    async def delete(self, request: web.Request) -> web.Response:
+        hass = request.app["hass"]
+        body = await request.post()
+        name = _sanitize_filename(str(body.get("file", "")))
+        if not name:
+            return self.json_message("bad filename", status_code=400)
+        removed = {"removed": False}
+
+        def _rm() -> None:
+            path = os.path.join(_chime_dir(hass), name)
+            if os.path.isfile(path):
+                os.remove(path)
+                removed["removed"] = True
+
+        await hass.async_add_executor_job(_rm)
+        async_dispatcher_send(hass, SIGNAL_CHIMES_UPDATED)
+        return self.json(removed)
+
+
 class P4DoorbellConfigView(HomeAssistantView):
     """GET: config bits the panel needs (tts entity, chime players)."""
 

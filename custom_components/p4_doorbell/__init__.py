@@ -150,10 +150,12 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     # Always also retry post-start: if lovelace was ready but its resource
     # collection wasn't, the first attempt may fail - the guard inside
     # _register_resource makes the retry a no-op when it succeeded.
-    hass.bus.async_listen_once(
-        EVENT_HOMEASSISTANT_STARTED,
-        lambda _: hass.async_create_task(_register_resource()),
-    )
+    async def _on_started(_event) -> None:
+        await _register_resource()
+
+    # coroutine listener: runs in the event loop (a plain lambda would be
+    # pushed to the executor thread and async_create_task would corrupt state)
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_started)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

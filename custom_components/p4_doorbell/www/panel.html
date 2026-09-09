@@ -127,8 +127,23 @@
             loadChimes();
           }).catch(function (e) { setStatus("chimeStatus", String(e), true); });
         };
+        var del = document.createElement("button");
+        del.className = "ghost"; del.textContent = "✕";
+        del.onclick = function () {
+          if (!confirm("Delete " + f + "?")) return;
+          fetch("/api/p4_doorbell/upload_chime", {
+            method: "DELETE",
+            headers: Object.assign({"Content-Type": "application/x-www-form-urlencoded"}, headers()),
+            body: "file=" + encodeURIComponent(f)
+          }).then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            setStatus("chimeStatus", "Deleted " + f);
+            loadChimes();
+          }).catch(function (e) { setStatus("chimeStatus", String(e), true); });
+        };
         row.appendChild(play);
         row.appendChild(use);
+        row.appendChild(del);
         list.appendChild(row);
       });
     }).catch(function (e) {

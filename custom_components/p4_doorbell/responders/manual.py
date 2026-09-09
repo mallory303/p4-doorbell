@@ -117,10 +117,26 @@ class ManualResponder:
                             ATTR_MEDIA_CONTENT_TYPE: "music",
                             ATTR_MEDIA_CONTENT_ID: chime_url,
                         },
+                        blocking=True,
+                    )
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.exception("chime failed on %s", player)
+                    await self.hass.services.async_call(
+                        PN_DOMAIN,
+                        "create",
+                        {
+                            "title": "P4 Doorbell: chime failed",
+                            "message": (
+                                f"`{player}` rejected playback ({err}). Pick a "
+                                "player that supports *Play media* - the "
+                                "companion-app media player on tablets cannot "
+                                "receive audio; use a speaker/display or the "
+                                "browser_mod browser player."
+                            ),
+                            "notification_id": "p4_doorbell_chime_fail",
+                        },
                         blocking=False,
                     )
-                except Exception:  # noqa: BLE001
-                    _LOGGER.exception("chime failed on %s", player)
 
         browser_id = (self.entry_data.get(CONF_POPUP_BROWSER) or "").strip()
         if browser_id and self.hass.services.has_service("browser_mod", "popup"):
