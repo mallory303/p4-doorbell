@@ -147,9 +147,11 @@ class ManualResponder:
                         blocking=False,
                     )
 
-        # chime via companion-app media command: plays through the device
-        # speaker even with the screen off (the Lenovo hub's own media player
-        # can't receive play_media - this is its audio path)
+        # chime via companion-app commands: the ThinkSmart's media player is
+        # dead (media_session unavailable, command_media no-ops, WebView audio
+        # gesture-locked) but its TTS pipeline WORKS (same path as voice-assist
+        # answers) - so the hub announces the ring aloud. command_media stays
+        # as a best-effort extra for devices with a healthy player.
         for target in notify_chime:
             slug = target.split(".", 1)[-1]  # notify.lenovo_x -> lenovo_x
             service = f"mobile_app_{slug}"
@@ -161,16 +163,13 @@ class ManualResponder:
                 )
                 continue
             try:
-                # proven combo on the ThinkSmart: raise the MUSIC stream
-                # (the companion app's default playback channel), then play.
-                # alarm_stream was tried first and stayed silent there.
                 await self.hass.services.async_call(
                     "notify",
                     service,
                     {
-                        "message": "command_volume_level",
+                        "message": "TTS",
                         "title": "P4 Doorbell",
-                        "data": {"media_stream": "music", "volume_level": 15},
+                        "data": {"tts_text": "Ding dong. Someone is at the door."},
                     },
                     blocking=False,
                 )
@@ -185,7 +184,7 @@ class ManualResponder:
                     blocking=False,
                 )
             except Exception:  # noqa: BLE001
-                _LOGGER.exception("chime command_media failed on %s", target)
+                _LOGGER.exception("chime companion command failed on %s", target)
 
         browser_id = (self.entry_data.get(CONF_POPUP_BROWSER) or "").strip()
         if browser_id and self.hass.services.has_service("browser_mod", "popup"):
