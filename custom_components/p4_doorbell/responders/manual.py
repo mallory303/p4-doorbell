@@ -213,12 +213,19 @@ class ManualResponder:
         # ThinkSmart (its companion-app media player is dead - media_session
         # sensor unavailable, command_media silently no-ops).
         for target in self.entry_data.get(CONF_NOTIFY_TARGETS) or []:
+            slug = target.split(".", 1)[-1]
+            service = slug if slug.startswith("mobile_app_") else f"mobile_app_{slug}"
+            if not self.hass.services.has_service("notify", service):
+                _LOGGER.warning("no legacy notify service notify.%s for %s - skipped",
+                                service, target)
+                continue
             try:
+                # legacy per-device service: the entity-form notify.send_message
+                # rejects the `data` payload (400) - and with it the sound
                 await self.hass.services.async_call(
                     "notify",
-                    "send_message",
+                    service,
                     {
-                        "entity_id": target,
                         "title": "🚪 Doorbell",
                         "message": "Someone is at the door.",
                         "data": {
