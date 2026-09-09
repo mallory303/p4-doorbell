@@ -107,6 +107,13 @@ class ManualResponder:
     async def on_ring(self, call) -> None:
         players = self.entry_data.get(CONF_CHIME_PLAYERS) or []
         notify_chime = self.entry_data.get(CONF_CHIME_NOTIFY) or []
+        if not notify_chime:
+            # fall back to the push targets: the same companion devices can
+            # play the chime via command_media - one less thing to configure
+            notify_chime = list(self.entry_data.get(CONF_NOTIFY_TARGETS) or [])
+            if notify_chime:
+                _LOGGER.info("chime: no dedicated chime targets; reusing notify targets %s",
+                             notify_chime)
         if players or notify_chime:
             chime_url = get_url(self.hass) + self._chime_url()
             for player in players:
