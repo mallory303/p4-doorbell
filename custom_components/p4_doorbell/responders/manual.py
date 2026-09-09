@@ -114,8 +114,8 @@ class ManualResponder:
             if notify_chime:
                 _LOGGER.info("chime: no dedicated chime targets; reusing notify targets %s",
                              notify_chime)
+        chime_url = get_url(self.hass) + self._chime_url()
         if players or notify_chime:
-            chime_url = get_url(self.hass) + self._chime_url()
             for player in players:
                 try:
                     await self.hass.services.async_call(
@@ -207,7 +207,11 @@ class ManualResponder:
         elif browser_id:
             _LOGGER.warning("browser_mod not installed - popup skipped")
 
-        # mobile push (companion app on phone/tablet; mirrors to the watch)
+        # mobile push (companion app on phone/tablet; mirrors to the watch).
+        # The notification CARRIES the chime as its custom channel sound:
+        # the notification stream is the only audio path that works on the
+        # ThinkSmart (its companion-app media player is dead - media_session
+        # sensor unavailable, command_media silently no-ops).
         for target in self.entry_data.get(CONF_NOTIFY_TARGETS) or []:
             try:
                 await self.hass.services.async_call(
@@ -217,6 +221,12 @@ class ManualResponder:
                         "entity_id": target,
                         "title": "🚪 Doorbell",
                         "message": "Someone is at the door.",
+                        "data": {
+                            "channel": "p4_doorbell_ring_v1",
+                            "importance": "high",
+                            "sound": chime_url,
+                            "tag": "p4_doorbell_ring",
+                        },
                     },
                     blocking=False,
                 )
