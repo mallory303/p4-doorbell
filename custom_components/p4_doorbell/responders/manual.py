@@ -154,6 +154,18 @@ class ManualResponder:
                 )
                 continue
             try:
+                # companion devices often sit with the alarm/media channel
+                # muted: raise it first or the chime plays into silence
+                await self.hass.services.async_call(
+                    "notify",
+                    service,
+                    {
+                        "message": "command_volume_level",
+                        "title": "P4 Doorbell",
+                        "data": {"media_stream": "alarm_stream", "volume_level": 15},
+                    },
+                    blocking=False,
+                )
                 await self.hass.services.async_call(
                     "notify",
                     service,
