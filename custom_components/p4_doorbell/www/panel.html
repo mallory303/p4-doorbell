@@ -111,6 +111,18 @@
     });
   }
 
+  // raw fetch with auth + one 401-refresh-retry (upload/delete use this)
+  function authedFetch(path, init, retried) {
+    init = init || {};
+    init.headers = Object.assign({ "Authorization": "Bearer " + token }, init.headers || {});
+    return fetch(path, init).then(function (r) {
+      if (r.status === 401 && !retried) {
+        return refreshToken().then(function () { return authedFetch(path, init, true); });
+      }
+      return r;
+    });
+  }
+
   var player = document.getElementById("player");
   var selectEntity = null;   // select.p4_doorbell_chime_sound
   var textEntity = null;     // text.p4_doorbell_announce_message
@@ -159,9 +171,9 @@
         del.className = "ghost"; del.textContent = "✕";
         del.onclick = function () {
           if (!confirm("Delete " + f + "?")) return;
-          fetch("/api/p4_doorbell/upload_chime", {
+          authedFetch("/api/p4_doorbell/upload_chime", {
             method: "DELETE",
-            headers: Object.assign({"Content-Type": "application/x-www-form-urlencoded"}, headers()),
+            headers: {"Content-Type": "application/x-www-form-urlencoded"},
             body: "file=" + encodeURIComponent(f)
           }).then(function (r) {
             if (!r.ok) throw new Error("HTTP " + r.status);
@@ -185,9 +197,8 @@
     if (!input.files.length) return;
     var fd = new FormData();
     fd.append("file", input.files[0]);
-    fetch("/api/p4_doorbell/upload_chime", {
+    authedFetch("/api/p4_doorbell/upload_chime", {
       method: "POST",
-      headers: { "Authorization": "Bearer " + token },
       body: fd
     }).then(function (r) {
       if (!r.ok) throw new Error("upload -> " + r.status);
