@@ -64,12 +64,37 @@
 (function () {
   "use strict";
 
-  var token = null;
+  var tokens = null;
   try {
-    token = JSON.parse(localStorage.getItem("hassTokens")).access_token;
+    tokens = JSON.parse(localStorage.getItem("hassTokens"));
   } catch (e) {}
+  var token = tokens ? tokens.access_token : null;
 
-  function api(method, path, body) {
+  // HA access tokens expire (~30 min); the frontend refreshes its own copy
+  // but this iframe's snapshot goes stale -> uploads/announce failed with 401.
+  // Refresh via the stored refresh_token, then retry once.
+  var refreshing = null;
+  function refreshToken() {
+    if (!tokens || !tokens.refresh_token) return Promise.reject(new Error("no refresh token"));
+    if (!refreshing) {
+      refreshing = fetch("/auth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "grant_type=refresh_token&refresh_token=" + encodeURIComponent(tokens.refresh_token)
+      }).then(function (r) {
+        if (!r.ok) throw new Error("token refresh -> " + r.status);
+        return r.json();
+      }).then(function (d) {
+        tokens.access_token = d.access_token;
+        token = d.access_token;
+        try { localStorage.setItem("hassTokens", JSON.stringify(tokens)); } catch (e) {}
+        refreshing = null;
+      }).catch(function (e) { refreshing = null; throw e; });
+    }
+    return refreshing;
+  }
+
+  function api(method, path, body, retried) {
     return fetch(path, {
       method: method,
       headers: {
@@ -78,6 +103,9 @@
       },
       body: body === undefined ? undefined : JSON.stringify(body)
     }).then(function (r) {
+      if (r.status === 401 && !retried) {
+        return refreshToken().then(function () { return api(method, path, body, true); });
+      }
       if (!r.ok) throw new Error(method + " " + path + " -> " + r.status);
       return r.json().catch(function () { return {}; });
     });
