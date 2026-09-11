@@ -206,38 +206,9 @@ class ManualResponder:
         elif browser_id:
             _LOGGER.warning("browser_mod not installed - popup skipped")
 
-        # mobile push (companion app on phone/tablet; mirrors to the watch).
-        # The notification CARRIES the chime as its custom channel sound:
-        # the notification stream is the only audio path that works on the
-        # ThinkSmart (its companion-app media player is dead - media_session
-        # sensor unavailable, command_media silently no-ops).
-        for target in self.entry_data.get(CONF_NOTIFY_TARGETS) or []:
-            slug = target.split(".", 1)[-1]
-            service = slug if slug.startswith("mobile_app_") else f"mobile_app_{slug}"
-            if not self.hass.services.has_service("notify", service):
-                _LOGGER.warning("no legacy notify service notify.%s for %s - skipped",
-                                service, target)
-                continue
-            try:
-                # legacy per-device service: the entity-form notify.send_message
-                # rejects the `data` payload (400) - and with it the sound
-                await self.hass.services.async_call(
-                    "notify",
-                    service,
-                    {
-                        "title": "🚪 Doorbell",
-                        "message": "Someone is at the door.",
-                        "data": {
-                            "channel": "p4_doorbell_ring_v1",
-                            "importance": "high",
-                            "sound": chime_url,
-                            "tag": "p4_doorbell_ring",
-                        },
-                    },
-                    blocking=False,
-                )
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("push notification failed on %s", target)
+        # mobile push notifications removed per user request - popup is the
+        # sole ring alert on the hub; phone/watch get their own alerts via
+        # automations if desired.
 
         # last-resort visibility path, always on
         await self.hass.services.async_call(
