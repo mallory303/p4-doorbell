@@ -36,14 +36,18 @@ class P4DoorbellChimesView(HomeAssistantView):
 
     async def get(self, request: web.Request) -> web.Response:
         hass = request.app["hass"]
-        try:
-            files = sorted(
-                f
-                for f in os.listdir(_chime_dir(hass))
-                if os.path.splitext(f)[1].lower() in _ALLOWED_EXT
-            )
-        except OSError:
-            files = []
+
+        def _list() -> list[str]:
+            try:
+                return sorted(
+                    f
+                    for f in os.listdir(_chime_dir(hass))
+                    if os.path.splitext(f)[1].lower() in _ALLOWED_EXT
+                )
+            except OSError:
+                return []
+
+        files = await hass.async_add_executor_job(_list)
         return self.json({"chimes": files})
 
 

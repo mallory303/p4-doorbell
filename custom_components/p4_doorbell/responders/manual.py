@@ -186,6 +186,35 @@ class ManualResponder:
             except Exception:  # noqa: BLE001
                 _LOGGER.exception("chime companion command failed on %s", target)
 
+        # sound-carrier notification: the ThinkSmart's media playback is dead
+        # but its NOTIFICATION stream is audible - so the chime rides a
+        # dedicated notification channel. The user assigns the chime mp3 to
+        # the "p4_doorbell_chime" channel once in Android settings
+        # (Settings -> Apps -> Home Assistant -> Notifications -> channel ->
+        # Sound); from then on every ring plays the ding-dong.
+        for target in notify_chime:
+            slug = target.split(".", 1)[-1]
+            service = f"mobile_app_{slug}"
+            if not self.hass.services.has_service("notify", service):
+                continue
+            try:
+                await self.hass.services.async_call(
+                    "notify",
+                    service,
+                    {
+                        "title": "🚪 Doorbell",
+                        "message": "Someone is at the door.",
+                        "data": {
+                            "channel": "p4_doorbell_chime",
+                            "importance": "high",
+                            "tag": "p4_doorbell_ring",
+                        },
+                    },
+                    blocking=False,
+                )
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("ring notification failed on %s", target)
+
         browser_id = (self.entry_data.get(CONF_POPUP_BROWSER) or "").strip()
         if browser_id and self.hass.services.has_service("browser_mod", "popup"):
             try:

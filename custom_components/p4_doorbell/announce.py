@@ -46,19 +46,28 @@ async def async_announce(hass: HomeAssistant, entry, data: dict, call: ServiceCa
 async def _visitor_announce(hass: HomeAssistant, api: P4Api, message: str, tts_entity: str) -> None:
     """Synthesize -> transcode to PCM16@16k -> stream to the P4 speaker."""
     try:
-        from homeassistant.components import tts as tts_comp
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+        from homeassistant.helpers.network import get_url
 
-        engine = tts_comp.async_get_engine(hass, tts_entity)
-        if engine is None:
-            raise RuntimeError(f"TTS engine not found: {tts_entity}")
-        audio = await engine.async_get_tts_audio(
-            message,
-            getattr(engine, "default_language", None) or "en",
-            getattr(engine, "default_options", None),
-        )
-        if not audio or not audio[1]:
+        session = async_get_clientsession(hass)
+        base = get_url(hass, allow_internal=True, prefer_external=False)
+        # version-proof: use the public REST endpoint instead of tts internals
+        async with session.post(
+            f"{base}/api/tts_get_url",
+            json={"platform": tts_entity, "message": message},
+        ) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+        url = data.get("url") or data.get("path")
+        if not url:
+            raise RuntimeError(f"tts_get_url returned no url: {data}")
+        if url.startswith("/"):
+            url = base + url
+        async with session.get(url) as resp:
+            resp.raise_for_status()
+            audio_bytes = await resp.read()
+        if not audio_bytes:
             raise RuntimeError("TTS returned no audio")
-        audio_bytes = audio[1]
     except Exception:
         _LOGGER.exception("visitor announce: TTS synthesis failed")
         return
