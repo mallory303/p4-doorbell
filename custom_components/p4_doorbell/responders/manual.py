@@ -147,11 +147,10 @@ class ManualResponder:
                         blocking=False,
                     )
 
-        # chime via companion-app commands: the ThinkSmart's media player is
-        # dead (media_session unavailable, command_media no-ops, WebView audio
-        # gesture-locked) but its TTS pipeline WORKS (same path as voice-assist
-        # answers) - so the hub announces the ring aloud. command_media stays
-        # as a best-effort extra for devices with a healthy player.
+        # chime via companion TTS: the ThinkSmart's media player is dead
+        # (media_session unavailable; command_media falls back to showing a
+        # raw notification) but its TTS pipeline WORKS (same path as
+        # voice-assist answers) - so the hub announces the ring aloud.
         for target in notify_chime:
             slug = target.split(".", 1)[-1]  # notify.lenovo_x -> lenovo_x
             service = f"mobile_app_{slug}"
@@ -173,18 +172,8 @@ class ManualResponder:
                     },
                     blocking=False,
                 )
-                await self.hass.services.async_call(
-                    "notify",
-                    service,
-                    {
-                        "message": "command_media",
-                        "title": "P4 Doorbell",
-                        "data": {"media_url": chime_url},
-                    },
-                    blocking=False,
-                )
             except Exception:  # noqa: BLE001
-                _LOGGER.exception("chime companion command failed on %s", target)
+                _LOGGER.exception("chime TTS command failed on %s", target)
 
         # sound-carrier notification: the ThinkSmart's media playback is dead
         # but its NOTIFICATION stream is audible - so the chime rides a
