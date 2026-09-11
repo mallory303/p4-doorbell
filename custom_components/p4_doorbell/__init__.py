@@ -92,7 +92,7 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
         sidebar_title="P4 Doorbell",
         sidebar_icon="mdi:doorbell-video",
         frontend_url_path="p4_doorbell",
-        config={"url": "/p4_doorbell_static/panel.html?v=043"},
+        config={"url": "/p4_doorbell_static/panel.html?v=044"},
     )
 
 

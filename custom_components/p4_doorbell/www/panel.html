@@ -64,47 +64,60 @@
 (function () {
   "use strict";
 
+  // Auth strategy: prefer the parent frame's live hass object (the companion
+  // app injects auth natively - localStorage.hassTokens only exists in plain
+  // browsers, and its access token expires anyway).
+  function parentHass() {
+    try {
+      var ha = window.parent.document.querySelector("home-assistant");
+      if (ha && ha.hass) return ha.hass;
+      var main = window.parent.document.querySelector("home-assistant-main");
+      if (main && main.hass) return main.hass;
+    } catch (e) {}
+    return null;
+  }
+
   var tokens = null;
   try {
     tokens = JSON.parse(localStorage.getItem("hassTokens"));
   } catch (e) {}
-  var token = tokens ? tokens.access_token : null;
 
-  // HA access tokens expire (~30 min); the frontend refreshes its own copy
-  // but this iframe's snapshot goes stale -> uploads/announce failed with 401.
-  // Refresh via the stored refresh_token, then retry once.
-  var refreshing = null;
-  function refreshToken() {
-    if (!tokens || !tokens.refresh_token) return Promise.reject(new Error("no refresh token"));
-    if (!refreshing) {
-      refreshing = fetch("/auth/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "grant_type=refresh_token&refresh_token=" + encodeURIComponent(tokens.refresh_token)
-      }).then(function (r) {
-        if (!r.ok) throw new Error("token refresh -> " + r.status);
-        return r.json();
-      }).then(function (d) {
-        tokens.access_token = d.access_token;
-        token = d.access_token;
-        try { localStorage.setItem("hassTokens", JSON.stringify(tokens)); } catch (e) {}
-        refreshing = null;
-      }).catch(function (e) { refreshing = null; throw e; });
+  function getToken() {
+    var hass = parentHass();
+    if (hass && hass.auth && hass.auth.accessToken) return hass.auth.accessToken;
+    return tokens ? tokens.access_token : null;
+  }
+
+  function refreshAuth() {
+    var hass = parentHass();
+    if (hass && hass.auth && hass.auth.refreshAccessToken) {
+      return hass.auth.refreshAccessToken();
     }
-    return refreshing;
+    if (!tokens || !tokens.refresh_token) return Promise.reject(new Error("no way to refresh auth"));
+    return fetch("/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "grant_type=refresh_token&refresh_token=" + encodeURIComponent(tokens.refresh_token)
+    }).then(function (r) {
+      if (!r.ok) throw new Error("token refresh -> " + r.status);
+      return r.json();
+    }).then(function (d) {
+      tokens.access_token = d.access_token;
+      try { localStorage.setItem("hassTokens", JSON.stringify(tokens)); } catch (e) {}
+    });
   }
 
   function api(method, path, body, retried) {
     return fetch(path, {
       method: method,
       headers: {
-        "Authorization": "Bearer " + token,
+        "Authorization": "Bearer " + getToken(),
         "Content-Type": "application/json"
       },
       body: body === undefined ? undefined : JSON.stringify(body)
     }).then(function (r) {
       if (r.status === 401 && !retried) {
-        return refreshToken().then(function () { return api(method, path, body, true); });
+        return refreshAuth().then(function () { return api(method, path, body, true); });
       }
       if (!r.ok) throw new Error(method + " " + path + " -> " + r.status);
       return r.json().catch(function () { return {}; });
@@ -114,10 +127,10 @@
   // raw fetch with auth + one 401-refresh-retry (upload/delete use this)
   function authedFetch(path, init, retried) {
     init = init || {};
-    init.headers = Object.assign({ "Authorization": "Bearer " + token }, init.headers || {});
+    init.headers = Object.assign({ "Authorization": "Bearer " + getToken() }, init.headers || {});
     return fetch(path, init).then(function (r) {
       if (r.status === 401 && !retried) {
-        return refreshToken().then(function () { return authedFetch(path, init, true); });
+        return refreshAuth().then(function () { return authedFetch(path, init, true); });
       }
       return r;
     });
