@@ -88,7 +88,7 @@ class P4DoorbellUploadView(HomeAssistantView):
     async def delete(self, request: web.Request) -> web.Response:
         hass = request.app["hass"]
         body = await request.post()
-        name = _sanitize_filename(str(body.get("file", "")))
+        name = _sanitize(str(body.get("file", "")))
         if not name:
             return self.json_message("bad filename", status_code=400)
         removed = {"removed": False}
@@ -102,6 +102,60 @@ class P4DoorbellUploadView(HomeAssistantView):
         await hass.async_add_executor_job(_rm)
         async_dispatcher_send(hass, SIGNAL_CHIMES_UPDATED)
         return self.json(removed)
+
+
+class P4DoorbellToMediaView(HomeAssistantView):
+    """POST {"file": name}: copy a chime into HA's media folder (/media/p4_doorbell).
+
+    The media folder is browsable by every media player via Media Source, so
+    the chime becomes playable anywhere without custom URLs. file="bundled"
+    copies the built-in ding-dong.
+    """
+
+    url = "/api/p4_doorbell/to_media"
+    name = "api:p4_doorbell:to_media"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        hass = request.app["hass"]
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        name = _sanitize(str(body.get("file", "")))
+        if not name:
+            return self.json_message("bad filename", status_code=400)
+
+        if name.lower() == "bundled":
+            from pathlib import Path
+
+            src = str(Path(__file__).parent / "www" / "chime.mp3")
+            name = "ding-dong.mp3"
+        else:
+            if os.path.splitext(name)[1].lower() not in _ALLOWED_EXT:
+                return self.json_message("unsupported type", status_code=400)
+            src = os.path.join(_chime_dir(hass), name)
+        if not os.path.isfile(src):
+            return self.json_message("no such chime", status_code=404)
+
+        result: dict = {}
+
+        def _copy() -> None:
+            media_root = hass.config.media_dirs.get("media") or hass.config.path("media")
+            dest_dir = os.path.join(media_root, "p4_doorbell")
+            os.makedirs(dest_dir, exist_ok=True)
+            import shutil
+
+            dest = os.path.join(dest_dir, name)
+            shutil.copyfile(src, dest)
+            result["media_source"] = f"media-source://media_source/local/p4_doorbell/{name}"
+
+        try:
+            await hass.async_add_executor_job(_copy)
+        except OSError as exc:
+            return self.json_message(f"copy failed: {exc}", status_code=500)
+        _LOGGER.info("chime copied to media folder: %s", result["media_source"])
+        return self.json({"ok": True, **result})
 
 
 class P4DoorbellConfigView(HomeAssistantView):

@@ -80,11 +80,13 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
     from .views import (
         P4DoorbellChimesView,
         P4DoorbellConfigView,
+        P4DoorbellToMediaView,
         P4DoorbellUploadView,
     )
 
     hass.http.register_view(P4DoorbellChimesView())
     hass.http.register_view(P4DoorbellUploadView())
+    hass.http.register_view(P4DoorbellToMediaView())
     hass.http.register_view(P4DoorbellConfigView())
     async_register_built_in_panel(
         hass,
@@ -92,7 +94,7 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
         sidebar_title="P4 Doorbell",
         sidebar_icon="mdi:doorbell-video",
         frontend_url_path="p4_doorbell",
-        config={"url": "/p4_doorbell_static/panel.html?v=044"},
+        config={"url": "/p4_doorbell_static/panel.html?v=045"},
     )
 
 

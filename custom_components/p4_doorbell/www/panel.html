@@ -180,6 +180,14 @@
             loadChimes();
           }).catch(function (e) { setStatus("chimeStatus", String(e), true); });
         };
+        var media = document.createElement("button");
+        media.className = "ghost"; media.textContent = "→ Media";
+        media.title = "Copy into HA's media folder (Media Source)";
+        media.onclick = function () {
+          api("POST", "/api/p4_doorbell/to_media", { file: f }).then(function (d) {
+            setStatus("chimeStatus", "Copied to media folder: " + (d.media_source || f));
+          }).catch(function (e) { setStatus("chimeStatus", String(e), true); });
+        };
         var del = document.createElement("button");
         del.className = "ghost"; del.textContent = "✕";
         del.onclick = function () {
@@ -196,6 +204,7 @@
         };
         row.appendChild(play);
         row.appendChild(use);
+        row.appendChild(media);
         row.appendChild(del);
         list.appendChild(row);
       });
