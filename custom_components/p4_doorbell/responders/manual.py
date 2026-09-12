@@ -93,7 +93,7 @@ def _popup_card(hass, entry_data: dict) -> dict:
         cards.append(
             {
                 "type": "iframe",
-                "url": f"/p4_doorbell_static/talkback.html?p4={p4_host}",
+                "url": f"/p4_doorbell_static/talkback_v051.html?p4={p4_host}",
                 "aspect_ratio": "12%",
             }
         )

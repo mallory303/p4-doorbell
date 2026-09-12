@@ -6,10 +6,12 @@
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center;
          font: 500 14px/1.4 sans-serif; color: #ddd; }
-  #wrap { display: flex; align-items: center; gap: 10px; }
+  #wrap { display: flex; align-items: center; gap: 10px; cursor: pointer;
+          user-select: none; padding: 6px 10px; }
   #dot { width: 12px; height: 12px; border-radius: 50%; background: #555;
-         transition: background .2s; }
+         transition: background .2s; flex: none; }
   #dot.live { background: #ff5252; animation: pulse 1s infinite; }
+  #dot.suspended { background: #ffa726; animation: pulse 1s infinite; }
   @keyframes pulse { 50% { opacity: .4; } }
 </style>
 </head>
@@ -19,7 +21,6 @@
 (function () {
   "use strict";
 
-  // ---- locate the P4 host: query param, else same host as HA ----
   var params = new URLSearchParams(location.search);
   var P4 = params.get("p4") || "";
   var dot = document.getElementById("dot");
@@ -39,24 +40,40 @@
     var hass = parentHass();
     if (!hass || !hass.states) return null;
     for (var id in hass.states) {
-      if (id.indexOf("sensor.p4_doorbell_call_state") === 0 ||
-          id.indexOf("call_state") > 0 && id.indexOf("p4_doorbell") >= 0) {
+      if (id.indexOf("call_state") > 0 && id.indexOf("p4_doorbell") >= 0) {
         return hass.states[id].state;
       }
     }
     return null;
   }
 
-  // ---- mic -> PCM16@16k -> POST chunks to the P4 ----
-  var ctx = null, stream = null, running = false;
+  var ctx = null, stream = null, active = false, chunks = 0, errors = 0;
+
+  function refreshLabel() {
+    if (!active) { dot.className = ""; lbl.textContent = "waiting for answer…"; return; }
+    if (!ctx) { lbl.textContent = "starting mic…"; return; }
+    if (ctx.state === "suspended") {
+      dot.className = "suspended";
+      lbl.textContent = "tap here to talk";
+      return;
+    }
+    dot.className = "live";
+    lbl.textContent = "talking to the door… (" + chunks + (errors ? " / " + errors + " err" : "") + ")";
+  }
+
+  // any tap inside this frame is a real gesture -> resume the AudioContext
+  document.getElementById("wrap").addEventListener("click", function () {
+    if (ctx && ctx.state === "suspended") ctx.resume().then(refreshLabel);
+  });
 
   function start() {
-    if (running || !P4) return;
+    if (active || !P4) return;
     navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
     }).then(function (s) {
       stream = s;
       ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      ctx.onstatechange = refreshLabel;
       var src = ctx.createMediaStreamSource(s);
       var proc = ctx.createScriptProcessor(4096, 1, 1);
       var buf = new Int16Array(0);
@@ -68,7 +85,6 @@
           var v = Math.max(-1, Math.min(1, inp[i]));
           merged[buf.length + i] = v < 0 ? v * 32768 : v * 32767;
         }
-        // send in ~256 ms chunks (4096 samples @16k)
         if (merged.length >= 4096) {
           var chunk = merged.slice(0, 4096);
           buf = merged.slice(4096);
@@ -77,35 +93,37 @@
             mode: "no-cors",
             headers: { "Content-Type": "application/octet-stream" },
             body: chunk.buffer.slice(0)
-          }).catch(function () {});
+          }).then(function () { chunks++; }).catch(function () { errors++; });
         } else {
           buf = merged;
         }
       };
       src.connect(proc);
       proc.connect(ctx.destination);
-      running = true;
-      dot.className = "live";
-      lbl.textContent = "talking to the door…";
+      active = true;
+      chunks = 0; errors = 0;
+      // try to start without gesture (works in plain browsers); if the WebView
+      // keeps us suspended, the strip becomes a tap-to-talk button
+      ctx.resume().then(refreshLabel).catch(refreshLabel);
+      refreshLabel();
     }).catch(function (e) {
       lbl.textContent = "mic blocked: " + (e && e.name ? e.name : e);
     });
   }
 
   function stop() {
-    if (!running) return;
-    running = false;
+    if (!active) return;
+    active = false;
     try { if (ctx) ctx.close(); } catch (e) {}
     try { if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
     ctx = null; stream = null;
-    dot.className = "";
-    lbl.textContent = "waiting for answer…";
+    refreshLabel();
   }
 
-  // poll call state (cheap, 1 Hz)
   setInterval(function () {
     var st = callState();
     if (st === "answered" || st === "module_active") start(); else stop();
+    if (active) refreshLabel();
   }, 1000);
 })();
 </script>
