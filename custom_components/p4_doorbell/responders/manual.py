@@ -20,6 +20,7 @@ from homeassistant.components.persistent_notification import (
     DOMAIN as PN_DOMAIN,
 )
 from homeassistant.helpers.network import get_url
+from homeassistant.helpers.event import async_call_later
 
 from homeassistant.helpers import entity_registry as er
 
@@ -27,6 +28,7 @@ from ..const import (
     CHIME_URL_PATH,
     CONF_CHIME_NOTIFY,
     CONF_CHIME_PLAYERS,
+    CONF_CHIME_VOLUME,
     CONF_NOTIFY_TARGETS,
     CONF_P4_HOST,
     CONF_POPUP_BROWSER,
@@ -94,6 +96,44 @@ class ManualResponder:
         self.hass = hass
         self.entry_data = entry_data
 
+    async def _chime_on_player(self, player: str, chime_url: str, chime_vol) -> None:
+        """Play the chime at the configured volume, then restore the player's
+        previous volume (a chime shouldn't leave the living room blaring)."""
+        prev_state = self.hass.states.get(player)
+        prev_vol = (
+            prev_state.attributes.get("volume_level")
+            if prev_state is not None
+            else None
+        )
+        if chime_vol is not None:
+            await self.hass.services.async_call(
+                MP_DOMAIN,
+                "volume_set",
+                {"entity_id": player, "volume_level": float(chime_vol) / 100},
+                blocking=False,
+            )
+        await self.hass.services.async_call(
+            MP_DOMAIN,
+            SERVICE_PLAY_MEDIA,
+            {
+                "entity_id": player,
+                ATTR_MEDIA_CONTENT_TYPE: "music",
+                ATTR_MEDIA_CONTENT_ID: chime_url,
+            },
+            blocking=True,
+        )
+        if chime_vol is not None and prev_vol is not None:
+
+            async def _restore(_now, p=player, v=prev_vol) -> None:
+                await self.hass.services.async_call(
+                    MP_DOMAIN,
+                    "volume_set",
+                    {"entity_id": p, "volume_level": v},
+                    blocking=False,
+                )
+
+            async_call_later(self.hass, 20, _restore)
+
     def _chime_url(self) -> str:
         """Selected chime from the library, else the bundled ding-dong."""
         entry_id = self.entry_data.get("_entry_id", "")
@@ -115,19 +155,11 @@ class ManualResponder:
                 _LOGGER.info("chime: no dedicated chime targets; reusing notify targets %s",
                              notify_chime)
         chime_url = get_url(self.hass) + self._chime_url()
+        chime_vol = self.entry_data.get(CONF_CHIME_VOLUME)
         if players or notify_chime:
             for player in players:
                 try:
-                    await self.hass.services.async_call(
-                        MP_DOMAIN,
-                        SERVICE_PLAY_MEDIA,
-                        {
-                            "entity_id": player,
-                            ATTR_MEDIA_CONTENT_TYPE: "music",
-                            ATTR_MEDIA_CONTENT_ID: chime_url,
-                        },
-                        blocking=True,
-                    )
+                    await self._chime_on_player(player, chime_url, chime_vol)
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.exception("chime failed on %s", player)
                     await self.hass.services.async_call(

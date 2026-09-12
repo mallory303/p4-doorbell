@@ -7,6 +7,8 @@ CONF_CHIME_PLAYERS = "chime_players"
 CONF_POPUP_BROWSER = "popup_browser_id"
 CONF_NOTIFY_TARGETS = "notify_targets"
 CONF_CHIME_NOTIFY = "chime_notify"
+CONF_CHIME_VOLUME = "chime_volume"
+DEFAULT_CHIME_VOLUME = 60  # percent; previous volume is restored after the chime
 CONF_TTS_ENTITY = "tts_entity"
 CONF_RESPONDERS = "responders"
 

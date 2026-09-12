@@ -7,6 +7,7 @@
         "data": {
           "p4_host": "Doorbell base URL",
           "chime_players": "Chime media players",
+          "chime_volume": "Chime volume % (previous volume is restored after the chime)",
           "chime_notify": "Chime via companion-app notification (tablets/phones, works screen-off)",
           "popup_browser_id": "Popup browser_id (browser_mod, optional)",
           "notify_targets": "Push notification targets (phone, tablet, watch)",
@@ -20,6 +21,7 @@
         "data": {
           "p4_host": "Doorbell base URL",
           "chime_players": "Chime media players",
+          "chime_volume": "Chime volume % (previous volume is restored after the chime)",
           "chime_notify": "Chime via companion-app notification (tablets/phones, works screen-off)",
           "popup_browser_id": "Popup browser_id (browser_mod, optional)",
           "notify_targets": "Push notification targets (phone, tablet, watch)",

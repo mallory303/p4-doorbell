@@ -14,11 +14,13 @@ from .const import (
     AVAILABLE_RESPONDERS,
     CONF_CHIME_NOTIFY,
     CONF_CHIME_PLAYERS,
+    CONF_CHIME_VOLUME,
     CONF_NOTIFY_TARGETS,
     CONF_P4_HOST,
     CONF_POPUP_BROWSER,
     CONF_RESPONDERS,
     CONF_TTS_ENTITY,
+    DEFAULT_CHIME_VOLUME,
     DEFAULT_TTS_ENTITY,
     DOMAIN,
 )
@@ -38,6 +40,11 @@ def _schema(defaults: dict) -> vol.Schema:
                 CONF_CHIME_PLAYERS, default=defaults.get(CONF_CHIME_PLAYERS, [])
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="media_player", multiple=True)
+            ),
+            vol.Optional(
+                CONF_CHIME_VOLUME, default=defaults.get(CONF_CHIME_VOLUME, DEFAULT_CHIME_VOLUME)
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0, max=100, unit_of_measurement="%", mode="slider")
             ),
             vol.Optional(
                 CONF_POPUP_BROWSER, default=defaults.get(CONF_POPUP_BROWSER, "")
