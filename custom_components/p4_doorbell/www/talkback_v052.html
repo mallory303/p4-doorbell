@@ -22,7 +22,6 @@
   "use strict";
 
   var params = new URLSearchParams(location.search);
-  var P4 = params.get("p4") || "";
   var dot = document.getElementById("dot");
   var lbl = document.getElementById("lbl");
 
@@ -33,6 +32,13 @@
       var main = window.parent.document.querySelector("home-assistant-main");
       if (main && main.hass) return main.hass;
     } catch (e) {}
+    return null;
+  }
+
+  function authToken() {
+    var hass = parentHass();
+    if (hass && hass.auth && hass.auth.accessToken) return hass.auth.accessToken;
+    try { return JSON.parse(localStorage.getItem("hassTokens")).access_token; } catch (e) {}
     return null;
   }
 
@@ -67,7 +73,7 @@
   });
 
   function start() {
-    if (active || !P4) return;
+    if (active) return;
     navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 }
     }).then(function (s) {
@@ -88,12 +94,18 @@
         if (merged.length >= 4096) {
           var chunk = merged.slice(0, 4096);
           buf = merged.slice(4096);
-          fetch(P4 + "/api/play", {
+          // same-origin through HA (avoids WebView mixed-content/PNA blocking;
+          // real response codes - no opaque no-cors guessing)
+          fetch("/api/p4_doorbell/talkback", {
             method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/octet-stream" },
+            headers: {
+              "Content-Type": "application/octet-stream",
+              "Authorization": "Bearer " + authToken()
+            },
             body: chunk.buffer.slice(0)
-          }).then(function () { chunks++; }).catch(function () { errors++; });
+          }).then(function (r) {
+            if (r.ok) { chunks++; } else { errors++; }
+          }).catch(function () { errors++; });
         } else {
           buf = merged;
         }

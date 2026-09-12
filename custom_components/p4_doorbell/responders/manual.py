@@ -87,16 +87,14 @@ def _popup_card(hass, entry_data: dict) -> dict:
         }
     )
     # talkback: iframe mic page - starts the tablet mic on Answer and streams
-    # PCM16@16k straight to the doorbell's /api/play speaker input
-    p4_host = (entry_data.get(CONF_P4_HOST) or "").rstrip("/")
-    if p4_host:
-        cards.append(
-            {
-                "type": "iframe",
-                "url": f"/p4_doorbell_static/talkback_v051.html?p4={p4_host}",
-                "aspect_ratio": "12%",
-            }
-        )
+    # PCM16@16k through HA (same-origin) to the doorbell's speaker input
+    cards.append(
+        {
+            "type": "iframe",
+            "url": "/p4_doorbell_static/talkback_v052.html",
+            "aspect_ratio": "12%",
+        }
+    )
     return {"type": "vertical-stack", "cards": cards}
 
 

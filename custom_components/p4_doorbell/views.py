@@ -158,6 +158,33 @@ class P4DoorbellToMediaView(HomeAssistantView):
         return self.json({"ok": True, **result})
 
 
+class P4DoorbellTalkbackView(HomeAssistantView):
+    """POST raw PCM16 chunk -> forward to the doorbell speaker (/api/play).
+
+    Same-origin for the popup iframe: dodges WebView mixed-content and
+    private-network-access blocking, and works over Nabu Casa too.
+    """
+
+    url = "/api/p4_doorbell/talkback"
+    name = "api:p4_doorbell:talkback"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        hass = request.app["hass"]
+        chunk = await request.read()
+        if not chunk or len(chunk) > 2 * 1024 * 1024:
+            return self.json_message("bad chunk", status_code=400)
+        for data in hass.data.get(DOMAIN, {}).values():
+            api = data.get("api")
+            if api is not None:
+                try:
+                    await api.async_play_pcm(chunk)
+                except Exception as exc:  # noqa: BLE001
+                    return self.json_message(f"p4 forward failed: {exc}", status_code=502)
+                return self.json({"ok": True, "bytes": len(chunk)})
+        return self.json_message("no doorbell configured", status_code=503)
+
+
 class P4DoorbellConfigView(HomeAssistantView):
     """GET: config bits the panel needs (tts entity, chime players)."""
 
