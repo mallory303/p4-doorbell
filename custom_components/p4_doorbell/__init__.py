@@ -41,7 +41,7 @@ from .responders.manual import ManualResponder
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["event", "binary_sensor", "button", "number", "camera", "select", "text"]
+PLATFORMS = ["event", "binary_sensor", "button", "number", "camera", "select", "text", "sensor"]
 
 RESPONDER_CLASSES = {
     "manual": ManualResponder,
