@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center;
+         font: 500 14px/1.4 sans-serif; color: #ddd; }
+  #wrap { display: flex; align-items: center; gap: 10px; cursor: pointer;
+          user-select: none; padding: 6px 10px; }
+  #dot { width: 12px; height: 12px; border-radius: 50%; background: #555;
+         transition: background .2s; flex: none; }
+  #dot.live { background: #ff5252; animation: pulse 1s infinite; }
+  #dot.suspended { background: #ffa726; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .4; } }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="dot"></div><span id="lbl">waiting for answer…</span></div>
+<script>
+(function () {
+  "use strict";
+
+  var dot = document.getElementById("dot");
+  var lbl = document.getElementById("lbl");
+
+  function parentHass() {
+    try {
+      var ha = window.parent.document.querySelector("home-assistant");
+      if (ha && ha.hass) return ha.hass;
+      var main = window.parent.document.querySelector("home-assistant-main");
+      if (main && main.hass) return main.hass;
+    } catch (e) {}
+    return null;
+  }
+
+  function authToken() {
+    var hass = parentHass();
+    if (hass && hass.auth && hass.auth.accessToken) return hass.auth.accessToken;
+    try { return JSON.parse(localStorage.getItem("hassTokens")).access_token; } catch (e) {}
+    return null;
+  }
+
+  function callState() {
+    var hass = parentHass();
+    if (!hass || !hass.states) return null;
+    for (var id in hass.states) {
+      if (id.indexOf("call_state") > 0 && id.indexOf("p4_doorbell") >= 0) {
+        return hass.states[id].state;
+      }
+    }
+    return null;
+  }
+
+  var ctx = null, micStream = null, active = false, chunks = 0, errors = 0;
+  var rxAbort = null, rxBytes = 0, playTime = 0;
+
+  function refreshLabel() {
+    if (!active) { dot.className = ""; lbl.textContent = "waiting for answer…"; return; }
+    if (!ctx) { lbl.textContent = "starting audio…"; return; }
+    if (ctx.state === "suspended") {
+      dot.className = "suspended";
+      lbl.textContent = "tap here to talk";
+      return;
+    }
+    dot.className = "live";
+    lbl.textContent = "in call - tx " + chunks + " / rx " + Math.round(rxBytes / 32) + "s"
+                    + (errors ? " (" + errors + " err)" : "");
+  }
+
+  // any tap inside this frame is a real gesture -> resume the AudioContext
+  // (one tap unlocks BOTH directions: mic capture and visitor playback)
+  document.getElementById("wrap").addEventListener("click", function () {
+    if (ctx && ctx.state === "suspended") ctx.resume().then(refreshLabel);
+  });
+
+  /* ---- visitor voice: HA-proxied P4 mic stream -> WebAudio ---- */
+  function playPcm(int16) {
+    if (!ctx || ctx.state !== "running") return;
+    var buf = ctx.createBuffer(1, int16.length, 16000);
+    var out = buf.getChannelData(0);
+    for (var i = 0; i < int16.length; i++) out[i] = int16[i] / 32768;
+    var src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    var t = Math.max(ctx.currentTime + 0.06, playTime);  /* 60 ms jitter cushion */
+    src.start(t);
+    playTime = t + buf.duration;
+  }
+
+  function startListen() {
+    if (rxAbort) return;
+    rxAbort = new AbortController();
+    rxBytes = 0; playTime = 0;
+    fetch("/api/p4_doorbell/mic_stream", {
+      headers: { "Authorization": "Bearer " + authToken() },
+      signal: rxAbort.signal
+    }).then(function (resp) {
+      if (!resp.ok || !resp.body) { errors++; return; }
+      var reader = resp.body.getReader();
+      var carry = new Uint8Array(0);
+      (function pump() {
+        reader.read().then(function (r) {
+          if (r.done) return;
+          var merged = new Uint8Array(carry.length + r.value.length);
+          merged.set(carry, 0);
+          merged.set(r.value, carry.length);
+          var even = merged.length - (merged.length % 2);
+          if (even > 0) {
+            rxBytes += even;
+            playPcm(new Int16Array(merged.buffer.slice(0, even)));
+            carry = merged.slice(even);
+          }
+          pump();
+        }).catch(function () {});
+      })();
+    }).catch(function () { errors++; });
+  }
+
+  function stopListen() {
+    if (!rxAbort) return;
+    rxAbort.abort();
+    rxAbort = null;
+  }
+
+  /* ---- your voice: mic -> HA -> doorbell speaker ---- */
+  function start() {
+    if (active) return;
+    navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true,
+               autoGainControl: true, channelCount: 1 }
+    }).then(function (s) {
+      micStream = s;
+      ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      ctx.onstatechange = refreshLabel;
+      var src = ctx.createMediaStreamSource(s);
+      var proc = ctx.createScriptProcessor(4096, 1, 1);
+      var mute = ctx.createGain();
+      mute.gain.value = 0;   /* ScriptProcessor must reach destination to run,
+                                but NEVER audibly (that would feed back) */
+      var buf = new Int16Array(0);
+      proc.onaudioprocess = function (ev) {
+        var inp = ev.inputBuffer.getChannelData(0);
+        var merged = new Int16Array(buf.length + inp.length);
+        merged.set(buf, 0);
+        for (var i = 0; i < inp.length; i++) {
+          var v = Math.max(-1, Math.min(1, inp[i]));
+          merged[buf.length + i] = v < 0 ? v * 32768 : v * 32767;
+        }
+        if (merged.length >= 4096) {
+          var chunk = merged.slice(0, 4096);
+          buf = merged.slice(4096);
+          fetch("/api/p4_doorbell/talkback", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/octet-stream",
+              "Authorization": "Bearer " + authToken()
+            },
+            body: chunk.buffer.slice(0)
+          }).then(function (r) {
+            if (r.ok) { chunks++; } else { errors++; }
+          }).catch(function () { errors++; });
+        } else {
+          buf = merged;
+        }
+      };
+      src.connect(proc);
+      proc.connect(mute);
+      mute.connect(ctx.destination);
+      active = true;
+      chunks = 0; errors = 0;
+      startListen();
+      ctx.resume().then(refreshLabel).catch(refreshLabel);
+      refreshLabel();
+    }).catch(function (e) {
+      lbl.textContent = "mic blocked: " + (e && e.name ? e.name : e);
+    });
+  }
+
+  function stop() {
+    if (!active) return;
+    active = false;
+    stopListen();
+    try { if (ctx) ctx.close(); } catch (e) {}
+    try { if (micStream) micStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+    ctx = null; micStream = null;
+    refreshLabel();
+  }
+
+  setInterval(function () {
+    var st = callState();
+    if (st === "answered" || st === "module_active") start(); else stop();
+    if (active) refreshLabel();
+  }, 1000);
+})();
+</script>
+</body>
+</html>

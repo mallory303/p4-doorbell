@@ -80,6 +80,7 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
     from .views import (
         P4DoorbellChimesView,
         P4DoorbellConfigView,
+        P4DoorbellMicStreamView,
         P4DoorbellTalkbackView,
         P4DoorbellToMediaView,
         P4DoorbellUploadView,
@@ -89,6 +90,7 @@ async def _async_register_panel(hass: HomeAssistant) -> None:
     hass.http.register_view(P4DoorbellUploadView())
     hass.http.register_view(P4DoorbellToMediaView())
     hass.http.register_view(P4DoorbellTalkbackView())
+    hass.http.register_view(P4DoorbellMicStreamView())
     hass.http.register_view(P4DoorbellConfigView())
     async_register_built_in_panel(
         hass,

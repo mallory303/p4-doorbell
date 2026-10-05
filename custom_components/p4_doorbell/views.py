@@ -185,6 +185,46 @@ class P4DoorbellTalkbackView(HomeAssistantView):
         return self.json_message("no doorbell configured", status_code=503)
 
 
+class P4DoorbellMicStreamView(HomeAssistantView):
+    """GET: live PCM16@16kHz stream from the doorbell mic, proxied through HA.
+
+    The popup iframe reads this with fetch() - same-origin and authenticated,
+    so it dodges the WebView's mixed-content/private-network blocking and
+    works over Nabu Casa. Runs until the client disconnects.
+    """
+
+    url = "/api/p4_doorbell/mic_stream"
+    name = "api:p4_doorbell:mic_stream"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.StreamResponse:
+        hass = request.app["hass"]
+        api = None
+        for data in hass.data.get(DOMAIN, {}).values():
+            api = data.get("api")
+            if api is not None:
+                break
+        if api is None:
+            return self.json_message("no doorbell configured", status_code=503)
+
+        out = web.StreamResponse(
+            status=200,
+            headers={
+                "Content-Type": "application/octet-stream",
+                "Cache-Control": "no-cache",
+            },
+        )
+        await out.prepare(request)
+        try:
+            async with api.mic_stream() as resp:
+                resp.raise_for_status()
+                async for chunk in resp.content.iter_any():
+                    await out.write(chunk)
+        except Exception as exc:  # noqa: BLE001 - client left or P4 went away
+            _LOGGER.debug("mic stream ended: %s", exc)
+        return out
+
+
 class P4DoorbellConfigView(HomeAssistantView):
     """GET: config bits the panel needs (tts entity, chime players)."""
 

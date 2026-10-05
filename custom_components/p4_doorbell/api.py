@@ -34,6 +34,16 @@ class P4Api:
         ) as resp:
             resp.raise_for_status()
 
+    def mic_stream(self):
+        """Open the live mic stream (GET /api/mic_stream). Caller closes.
+
+        Returns the aiohttp context manager - use `async with api.mic_stream() as resp`.
+        """
+        return self._session.get(
+            f"{self._host}/api/mic_stream",
+            timeout=aiohttp.ClientTimeout(total=None, sock_read=30),
+        )
+
     async def async_get_volume(self) -> int:
         async with self._session.get(
             f"{self._host}/api/volume", timeout=aiohttp.ClientTimeout(total=5)
