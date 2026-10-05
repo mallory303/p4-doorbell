@@ -35,7 +35,9 @@ class P4DoorbellCamera(Camera):
     # declares "this camera streams": the dialog shows live view (WebRTC via
     # go2rtc, HLS fallback) instead of just a still preview
     _attr_supported_features = CameraEntityFeature.STREAM
-    _attr_frontend_stream_type = StreamType.HLS
+    # WebRTC (go2rtc) - near-realtime. Was StreamType.HLS for months, which is
+    # segmented and buffers several seconds: that's the heavy popup delay.
+    _attr_frontend_stream_type = StreamType.WEB_RTC
 
     def __init__(self, entry: ConfigEntry) -> None:
         super().__init__()
