@@ -189,33 +189,10 @@ class ManualResponder:
                         blocking=False,
                     )
 
-        # chime via companion TTS: the ThinkSmart's media player is dead
-        # (media_session unavailable; command_media falls back to showing a
-        # raw notification) but its TTS pipeline WORKS (same path as
-        # voice-assist answers) - so the hub announces the ring aloud.
-        for target in notify_chime:
-            slug = target.split(".", 1)[-1]  # notify.lenovo_x -> lenovo_x
-            service = f"mobile_app_{slug}"
-            if not self.hass.services.has_service("notify", service):
-                _LOGGER.warning(
-                    "chime: no legacy notify service notify.%s for %s - skipped",
-                    service,
-                    target,
-                )
-                continue
-            try:
-                await self.hass.services.async_call(
-                    "notify",
-                    service,
-                    {
-                        "message": "TTS",
-                        "title": "P4 Doorbell",
-                        "data": {"tts_text": "Ding dong. Someone is at the door."},
-                    },
-                    blocking=False,
-                )
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("chime TTS command failed on %s", target)
+        # companion TTS ring announce removed per user request (2026-10-05):
+        # "I don't need the announcement 'Ding dong someone is at the door'".
+        # The audible ring alert is the Nest Hub chime (players above) + the
+        # sound-carrier notification below.
 
         # sound-carrier notification: the ThinkSmart's media playback is dead
         # but its NOTIFICATION stream is audible - so the chime rides a
