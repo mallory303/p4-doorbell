@@ -1,0 +1,65 @@
+# P4 Doorbell — ring a Lenovo Smart Display when the doorbell is pressed.
+#
+# Copy into automations.yaml (or create via the UI). Two things to adjust:
+#   1. TRIGGER  — point at your real doorbell (example: a button/binary_sensor)
+#   2. SERVICE  — notify.mobile_app_lenovo_starview -> your device's service
+#      (Developer Tools -> Actions -> notify. to list valid names)
+
+alias: Doorbell — ring Lenovo display
+description: Speaks an announcement at alarm volume on the Lenovo Smart Display.
+triggers:
+  # --- REPLACE with your real doorbell trigger ---------------------------
+  - trigger: state
+    entity_id: binary_sensor.front_door_doorbell
+    to: "on"
+  # Alternative: an event-based doorbell (e.g. ESPHome / MQTT / webhook):
+  # - trigger: event
+  #   event_type: doorbell_pressed
+  # -----------------------------------------------------------------------
+actions:
+  # Primary: spoken announcement at ALARM volume (works in silent/DND).
+  - action: notify.mobile_app_lenovo_starview
+    data:
+      title: Doorbell
+      message: TTS
+      data:
+        tts_text: Ding dong. Someone is at the front door.
+        media_stream: alarm_stream
+
+  # Optional: real ringtone via a dedicated notification channel.
+  # Send once, then on the device: Settings -> Apps -> Home Assistant ->
+  # Notifications -> "doorbell" channel -> pick sound, allow DND override.
+  # - action: notify.mobile_app_lenovo_starview
+  #   data:
+  #     title: Doorbell
+  #     message: Someone is at the front door
+  #     data:
+  #       channel: doorbell
+  #       importance: high
+
+  # Optional: camera snapshot in the same push (relative URL — the app
+  # resolves it against whichever HA address it is connected through).
+  # - action: camera.snapshot
+  #   target:
+  #     entity_id: camera.front_door
+  #   data:
+  #     filename: /config/www/snapshots/doorbell.jpg
+  # - action: notify.mobile_app_lenovo_starview
+  #   data:
+  #     title: Doorbell
+  #     message: Front door camera
+  #     data:
+  #       image: /local/snapshots/doorbell.jpg
+
+  # iOS variant (critical alert — plays even in silent/DND):
+  # - action: notify.mobile_app_your_iphone
+  #   data:
+  #     message: Someone is at the door
+  #     data:
+  #       push:
+  #         sound:
+  #           name: default
+  #           critical: 1
+  #           volume: 1.0
+
+mode: single
